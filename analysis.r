@@ -1,9 +1,13 @@
 library(tidyverse)
 library(jsonlite)
+library(here)
 
 # owid data is organised as a list of data frames, keyed by country (iso3)
-fromJSON("https://covid.ourworldindata.org/data/owid-covid-data.json") %>%
+owid <- get_owid()
+
+owid %>%
   bind_rows(.id = "iso3") %>%
+  mutate(date = as.Date(date))
   unpack(data) ->
 owid
 
