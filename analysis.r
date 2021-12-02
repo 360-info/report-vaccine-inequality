@@ -7,8 +7,8 @@ owid <- get_owid()
 
 owid %>%
   bind_rows(.id = "iso3") %>%
-  mutate(date = as.Date(date))
-  unpack(data) ->
+  unpack(data) %>%
+  mutate(date = as.Date(date)) ->
 owid
 
 # fyi: some indicators are singletons (bind_rows recycles them!):
@@ -36,11 +36,18 @@ owid %>%
     people_fully_vaccinated) %>%
   filter(
     !is.na(people_fully_vaccinated),
-    !starts_with(iso3, "OWID_")) %>%
-  mutate(vac_prop = people_fully_vaccinated / population) %>%
-  # summary() %>%
-  {
-    ggplot(.) +
-      aes(x = date, y = vac_prop, colour = iso3) +
-      geom_line()
-  }
+    !str_starts(iso3, "OWID_")) %>%
+  mutate(vac_prop = people_fully_vaccinated / population) ->
+owid_pct_vaxxed
+
+owid_pct_vaxxed %>%
+{
+  ggplot(.) +
+    aes(x = date, y = vac_prop, colour = "iso3") +
+    geom_line() +
+    geom_point(size = 3) +
+    scale_y_continuous(labels = scales::percent) +
+    labs(
+      x = NULL, y = "% Fully vaccinated"
+    )
+}
