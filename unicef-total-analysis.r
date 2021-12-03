@@ -6,6 +6,7 @@ library(ragg)
 library(here)
 
 dose_labeller <- scales::label_number_si("", accuracy = 0.1)
+dose_axis_labeller <- scales::label_number_si("", accuracy = 1)
 
 unicef <-
   read_csv(
@@ -56,7 +57,7 @@ totals %>%
       # scale_y_continuous(labels = scales::percent) +
       scale_y_continuous(
         breaks = c(0, 2, 4, 6, 8, 10) * 1e9,
-        labels = dose_labeller) +
+        labels = dose_axis_labeller) +
       scale_fill_manual(
         # specify these in the reverse of the factor levels above
         values = bar_colours) +
