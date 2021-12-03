@@ -1,0 +1,126 @@
+---
+title: ""
+author: "James Goldie, 360info"
+date: "`r Sys.Date()`"
+---
+
+```{r}
+library(tidyverse)
+library(countrycode)
+library(themes360info)
+library(here)
+source(here("util.r"))
+```
+
+In October 2021, the WHO [called for 40% of all countries to be vaccinated by end-2021 and 70% by
+mid-2022](https://www.who.int/news/item/07-10-2021-who-un-set-out-steps-to-meet-world-covid-vaccination-targets). It further noted that 56 countries - mainly 'in Africa and the Middle East' - had not yet achieved 10% vaccination, as of the end of the previous month.
+
+To start, let's look at OWID data showing howing how many total vaccinations there've been (both raw and per 100 people), the number of people at least partly vaccinated (both raw and per 100 people) and the number of people _fully_ vaccinated (both raw and per 100 people).
+
+I've taken the latest available data for each country up to the end of October. Our UNICEF data goes up to about the end of October (dependent on the country), so I'd like to get the two as comparable as possible.
+
+```{r tidyowid}
+# owid: lots of vaccine stats by country, daily (we'll take the latest daily
+# data)
+owid <- get_owid()
+
+owid %>%
+  bind_rows(.id = "iso3") %>%
+  unpack(data) %>%
+  mutate(date = as.Date(date)) %>%
+  filter(continent == "Africa", date < as.Date("2021-11-01")) %>%
+  # select vaccination and id columns
+  select(iso3, location, population, date,
+    starts_with("total_vacc"),
+    starts_with("people_vacc"),
+    starts_with("people_fully")) %>%
+  # keep rows if any vax indicators...
+  filter(if_any(
+    c(starts_with("total_vacc"), starts_with("people_vacc"),
+      starts_with("people_fully")),
+    # ... are present
+    ~ !is.na(.x))) %>%
+  # then just keep the latest data
+  group_by(location) %>%
+  filter(date == max(date, na.rm = TRUE)) %>% 
+  ungroup() ->
+owid_africa_oct
+
+owid_africa_oct
+```
+
+
+It looks like most of these countries have data present (except Zambia), with the "latest data" falling over the range `r range(owid_africa_oct$date)`.
+
+My assumption is that `people_fully_vaccinated` have had two doses, while `people_vaccinated` have had one or more. So I would expect those estimates to line up.
+
+```{r dosecheck}
+total_dose_check <-
+  owid_africa_oct %>%
+  select(location, population, total_vaccinations, people_vaccinated,
+    people_fully_vaccinated) %>%
+  mutate(
+    people_partly_vaccinated = people_vaccinated - people_fully_vaccinated,
+    doses_from_people =
+      people_partly_vaccinated + (2 * people_fully_vaccinated),
+    dose_est_diff = doses_from_people - total_vaccinations,
+    dose_diff_pct = dose_est_diff / total_vaccinations) %>%
+  select(location, total_vaccinations, dose_est_diff, dose_diff_pct)
+
+ggplot(total_dose_check) +
+  aes(x = dose_diff_pct) +
+  geom_histogram() +
+  scale_x_continuous(labels = scales::percent) +
+  theme_minimal() +
+  labs(
+    x = "% difference between doses from people vaccinated and total doses",
+    y = "Number of countries")
+```
+
+Looks like _most_ estimates are spot on or within 10%, but for a few countries things are out by as much as 60-80%. Which ones are those?
+
+```{r dosecheck}
+total_dose_check %>% filter(abs(dose_diff_pct) > 0.5)
+```
+
+Now let's look at the UNICEF data, which also gives an idea of total doses delivered - but broken down by program.
+
+```{r unicef}
+unicef <- get_unicef_totals()
+
+# standardise names
+# name_subs <- c(
+#   "CAF" = "Central African Republic",
+#   "COD" = "Democratic Republic of the Congo",
+#   "STP" = "Sao Tome and Principe",
+#   "TZA" = "Tanzania")
+# standardise_countries <- partial(countrycode, origin = "iso3c",
+#     destination = "country.name.en", custom_match = name_subs)
+
+unicef %>%
+  mutate(
+    iso3 = countrycode(country, origin = "country.name",
+      destination = "iso3c")) ->
+unicef_africa
+
+unicef_africa
+```
+
+Blank cells here, which I understand to be essentially zero rather than "we don't know", are marked as `NA`.
+
+Now let's join the two data sources that we can start comparing them.
+
+```{r join}
+
+owid_africa_oct %>%
+  left_join(unicef_africa, by = "iso3") %>%
+  select(iso3, location, owid = total_vaccinations, unicef = total) %>%
+  mutate(
+    diff = owid - unicef,
+    diff_pct = diff / owid * 100) %>%
+  print(n = 60)
+```
+
+Okay, looks like these total dose estimates are wildly different: UNICEF's figures are _much larger_ than OWID's. (generally on the order of 100% to 300% bigger).
+
+
