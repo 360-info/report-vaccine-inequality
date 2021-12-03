@@ -1,6 +1,7 @@
 library(tidyverse)
 library(forcats)
 library(themes360info)
+library(ggtext)
 library(ragg)
 library(here)
 
@@ -23,7 +24,9 @@ totals <-
     Unknown    = sum(unknown, na.rm = TRUE)) %>%
   pivot_longer(everything(), names_to = "source", values_to = "count") %>%
   mutate(
-    source = fct_reorder(source, count),
+    # factor order is the reverse of our bar stacking order (last level ends up left/bottom of ggplot2 bars)
+    source = factor(source,
+      levels = c("Unknown", "AVAT", "Donations", "COVAX", "Commercial")),
     frac = count / sum(count))
 
 # okay, here's an easy graphic: breakdown of global vaccines by program
@@ -32,14 +35,28 @@ totals %>%
   {
     ggplot(.) +
       aes(x = x, y = count, fill = source) +
-      geom_col(position = "fill") +
+      geom_col() +
+      # geom_col(position = "fill") +
       coord_flip() +
-      scale_y_continuous(labels = scales::percent) +
-      scale_fill_discrete(guide = guide_legend(reverse = TRUE)) +
+      # scale_y_continuous(labels = scales::percent) +
+      scale_y_continuous(
+        breaks = c(0, 2, 4, 6, 8, 10) * 1e9,
+        labels = scales::label_number_si("", accuracy = 1)) +
+      scale_fill_manual(
+        # specify these in the reverse of the factor levels above
+        values = c(
+          "Commercial" = pal_360[["darkblue"]],
+          "COVAX"      = pal_360[["green"]],
+          "Donations"  = pal_360[["teal"]],
+          "AVAT"       = pal_360[["grey"]],
+          "Unknown"    = pal_360[["lightgrey"]])) +
       theme_360info() +
       theme(
         legend.direction = "horizontal",
         legend.position = "top",
+        legend.text = element_text(size = rel(1)),
+        legend.title = element_text(size = rel(1)),
+        plot.caption = element_markdown(size = rel(0.9)),
         axis.text.y = element_blank(),
         axis.text.x = element_text(size = rel(1.5)),
         panel.grid = element_blank()
@@ -47,12 +64,13 @@ totals %>%
       labs(
         x = NULL, y = NULL,
         fill = "Source",
-        title = toupper("Vaccines by source"),
-        subtitle = toupper("Total vaccines globally"),
-        caption = paste0(
-          "UNICEF COVID-19 Vaccine Market Dashboard\n",
-          "<unicef.org/supply/covid-19-vaccine-market-dashboard>"))
+        title = toupper("Vaccine doses by source"),
+        subtitle =
+          toupper("Donations make up a small fraction of global vaccine doses"),
+        caption = paste(
+          "**SOURCE: UNICEF** COVID-19 Vaccine Market Dashboard",
+          "&lt;unicef.org/supply/covid-19-vaccine-market-dashboard&gt;"))
   } %>%
   ggsave(here("out", "total-vaccines.png"), .,
-    width = 6, height = 2, device = agg_png, scale = 2)
+    width = 1, height = 1 / 3, device = agg_png, dpi = 100, scale = 12)
 
