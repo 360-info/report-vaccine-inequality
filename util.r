@@ -34,3 +34,16 @@ get_owid <- function(cached_date = NULL, update = FALSE) {
   return(fromJSON(here("data", cached_file)))
 }
 
+#' get_unicef_totals: load the unicef data on receipt of vaccines by source
+#' program and by country
+#'
+#' @return the JSON representation of the OWID data
+get_unicef_totals <- function() {
+  read_csv(
+    here("data", "unicef-vaccine-programs.csv"),
+    col_names = c("country", "commercial", "donations", "covax", "avat",
+      "unknown", "total"),
+    skip = 1,
+    col_types = "cnnnnnn",
+    na = c("(Blank)"))
+}

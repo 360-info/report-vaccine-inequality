@@ -8,14 +8,7 @@ library(here)
 dose_labeller <- scales::label_number_si("", accuracy = 0.1)
 dose_axis_labeller <- scales::label_number_si("", accuracy = 1)
 
-unicef <-
-  read_csv(
-    here("data", "unicef-vaccine-programs.csv"),
-    col_names = c("country", "commercial", "donations", "covax", "avat",
-      "unknown", "total"),
-    skip = 1,
-    col_types = "cnnnnnn",
-    na = c("(Blank)"))
+unicef <- get_unicef_totals()
 
 totals <-
   unicef %>%
