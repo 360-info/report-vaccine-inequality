@@ -5,6 +5,8 @@ library(ggtext)
 library(ragg)
 library(here)
 
+dose_labeller <- scales::label_number_si("", accuracy = 0.1)
+
 unicef <-
   read_csv(
     here("data", "unicef-vaccine-programs.csv"),
@@ -16,18 +18,31 @@ unicef <-
 
 totals <-
   unicef %>%
+  # doing a sheeky and ordering the bar levels here rather than explicitly with
+  # factor (because i want to add %s to the labels)
+  # factor order is the reverse of our bar stacking order (last level ends up left/bottom of ggplot2 bars)
   summarise(
-    Commercial = sum(commercial, na.rm = TRUE),
+    Unknown    = sum(unknown, na.rm = TRUE),
+    AVAT       = sum(avat, na.rm = TRUE),
     Donations  = sum(donations, na.rm = TRUE),
     COVAX      = sum(covax, na.rm = TRUE),
-    AVAT       = sum(avat, na.rm = TRUE),
-    Unknown    = sum(unknown, na.rm = TRUE)) %>%
+    Commercial = sum(commercial, na.rm = TRUE),
+    ) %>%
   pivot_longer(everything(), names_to = "source", values_to = "count") %>%
   mutate(
-    # factor order is the reverse of our bar stacking order (last level ends up left/bottom of ggplot2 bars)
-    source = factor(source,
-      levels = c("Unknown", "AVAT", "Donations", "COVAX", "Commercial")),
+    # add counts to the labels
+    source = paste0(source, ": ", dose_labeller(count)),
+    source = factor(source, levels = source),
     frac = count / sum(count))
+
+# specify the palette using the (reverse of the) order above
+bar_colours <-
+  c(pal_360[["darkblue"]],
+    pal_360[["green"]],
+    pal_360[["teal"]],
+    pal_360[["grey"]],
+    pal_360[["lightgrey"]]) %>%
+  set_names(rev(totals$source))
 
 # okay, here's an easy graphic: breakdown of global vaccines by program
 totals %>%
@@ -41,15 +56,10 @@ totals %>%
       # scale_y_continuous(labels = scales::percent) +
       scale_y_continuous(
         breaks = c(0, 2, 4, 6, 8, 10) * 1e9,
-        labels = scales::label_number_si("", accuracy = 1)) +
+        labels = dose_labeller) +
       scale_fill_manual(
         # specify these in the reverse of the factor levels above
-        values = c(
-          "Commercial" = pal_360[["darkblue"]],
-          "COVAX"      = pal_360[["green"]],
-          "Donations"  = pal_360[["teal"]],
-          "AVAT"       = pal_360[["grey"]],
-          "Unknown"    = pal_360[["lightgrey"]])) +
+        values = bar_colours) +
       theme_360info() +
       theme(
         legend.direction = "horizontal",
@@ -63,7 +73,7 @@ totals %>%
       ) +
       labs(
         x = NULL, y = NULL,
-        fill = "Source",
+        fill = NULL,
         title = toupper("Vaccine doses by source"),
         subtitle =
           toupper("Donations make up a small fraction of global vaccine doses"),
