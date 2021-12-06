@@ -1,0 +1,12 @@
+---
+title: ""
+author: "James Goldie, 360info"
+date: "`r Sys.Date()`"
+---
+
+```{r}
+library(tidyverse)
+library(themes360info)
+library(here)
+source(here("util.r"))
+```
