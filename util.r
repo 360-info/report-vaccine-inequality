@@ -12,6 +12,9 @@ library(here)
 #' @return the JSON representation of the OWID data
 get_owid <- function(cached_date = NULL, update = FALSE) {
 
+  # create the `data` folder (if it doesn't already exist)
+  dir.create(here("data"))
+
   # look for a saved owid json in `data`
   cached_owid <- list.files(here("data"), pattern = glob2rx("owid-*.json"))
 
