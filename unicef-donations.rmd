@@ -83,7 +83,7 @@ Looks like _most_ estimates are spot on or within 10%, but for a few countries t
 total_dose_check %>% filter(abs(dose_diff_pct) > 0.5)
 ```
 
-Now let's look at the UNICEF data, which also gives an idea of total doses delivered - but broken down by program.
+Now let's look at the UNICEF data, which gives an idea of total doses delivered (to the countries in question, not actually administered to people!) - but broken down by program.
 
 ```{r unicef}
 unicef <- get_unicef_totals()
@@ -106,7 +106,7 @@ unicef_africa
 unicef_africa
 ```
 
-Blank cells here, which I understand to be essentially zero rather than "we don't know", are marked as `NA`.
+(Blank cells here, which I understand to be essentially zero rather than "we don't know", are marked as `NA`.)
 
 Now let's join the two data sources that we can start comparing them.
 
@@ -121,6 +121,4 @@ owid_africa_oct %>%
   print(n = 60)
 ```
 
-Okay, looks like these total dose estimates are wildly different: UNICEF's figures are _much larger_ than OWID's. (generally on the order of 100% to 300% bigger).
-
-
+Looks like these total dose estimates are wildly different: UNICEF's figures are _much larger_ than OWID's. (generally on the order of 100% to 300% bigger). That's not unreasonable: you have to deliver a shot to a country before it can be administered.
