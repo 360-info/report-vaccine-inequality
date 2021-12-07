@@ -4,9 +4,81 @@ author: "James Goldie, 360info"
 date: "`r Sys.Date()`"
 ---
 
-```{r}
+```{r setup}
 library(tidyverse)
 library(themes360info)
+library(lubridate)
 library(here)
 source(here("util.r"))
+```
+
+```{r import}
+india <- 
+  # scrape table from the web
+  get_india_exports() %>%
+  # remove the first 2 rows (grouped header) and the last 3 (total/footer)...
+  head(-3) %>%
+  tail(-2) %>%
+  # ... and overwrite the default headers
+  set_names(c(
+    "row", "country",
+      paste0("grant_", c("n", "date")),
+      paste0("commercial_", c("n", "date")),
+      paste0("covax_", c("n", "date")),
+      "total_n"))
+
+# write out tidy totals to disk
+india %>%
+  select(country, total_n) %>%
+  mutate(total_n = as.numeric(total_n) * 1e5) %>%
+  print() %>%
+  write_csv(here("out", "india-exports-totals.csv"))
+```
+
+```{r bycountry}
+# okay, first we're going to pivot longer by dispatch type (grant/commercial/covax). then, we'll lengthen further by pulling out each individual dispatch
+india %>%
+  select(-total_n) %>%
+  # pivot longer by program (grant/commercial/covax)
+  pivot_longer(
+    c(ends_with("_n"), ends_with("_date")),
+    names_to = c("program", ".value"),
+    names_sep = "_") ->
+india_dest_totals
+
+# tidy and write out to disk
+india_dest_totals %>%
+  mutate(total = as.numeric(n) * 1e5) %>%
+  replace_na(list(total = 0)) %>%
+  select(country, program, total) %>% 
+  print() %>%
+  write_csv(here("out", "india-exports-byprogram.csv"))
+
+```
+  
+But there's also information on individual dispatch dates and numbers here. Let's pivot longer by individual dispatach:
+
+```{r bydisptach}
+# now pivot longer by individual dispatch
+india_dest_totals %>%
+  rename(total_n = n) %>%
+  separate_rows(date, sep = ";") %>%
+  mutate(date = na_if(date, "")) %>%
+  # dispatches are written "(n) date", but n is only included if there're
+  # multiple dispatches
+  mutate(
+    date = str_remove(date, coll("(")),
+    date = str_replace(date, regex("SII\\)|BB\\)|\\)"), "|")) %>%
+  separate(date, into = c("n", "date"), sep = "\\|\\s*", fill = "left") %>%
+  # where there's only one dispatch, take the total figure
+  mutate(
+    n = as.numeric(coalesce(n, total_n)) * 1e5,
+    date = dmy(date)) %>%
+  select(country, program, quantity = n, date) ->
+india_dispatch_totals
+
+# write out to disk
+india_dispatch_totals %>%
+  print() %>%
+  write_csv(here("out", "india-exports-bydispatch.csv"))
 ```

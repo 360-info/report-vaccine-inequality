@@ -62,14 +62,4 @@ get_india_exports <- function() {
   read_html("https://www.mea.gov.in/vaccine-supply.htm") %>%
     html_element("#innerContent table.tableData") %>%
     html_table()
-    # remove the first 2 rows (grouped header) and the last 3 (total/footer)...
-    head(-3) %>%
-    tail(-2) %>%
-    # ... and overwrite the default headers
-    set_names(c(
-      "row", "country",
-        paste0("grant_", c("n", "date")),
-        paste0("commercial_", c("n", "date")),
-        paste0("covax_", c("n", "date")),
-        "total_n"))
 }
