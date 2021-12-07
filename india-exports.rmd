@@ -39,7 +39,14 @@ india %>%
     ggplot(.) +
       aes(x = country, y = total_n) +
       geom_col() +
-      coord_flip()
+      scale_y_continuous(labels = scales::label_number_si("", accuracy = 1)) +
+      coord_flip() +
+      labs(
+        x = NULL, y = toupper("Number of vaccine doses exported"),
+        title = toupper("Indian vaccine exports"),
+        subtitle = "Total to date"
+      ) +
+      theme_360info()
   }
 ```
 
