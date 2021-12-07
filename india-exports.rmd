@@ -30,9 +30,17 @@ india <-
 # write out tidy totals to disk
 india %>%
   select(country, total_n) %>%
-  mutate(total_n = as.numeric(total_n) * 1e5) %>%
+  mutate(
+    total_n = as.numeric(total_n) * 1e5,
+    country = fct_reorder(country, total_n)) %>%
   print() %>%
-  write_csv(here("out", "india-exports-totals.csv"))
+  write_csv(here("out", "india-exports-totals.csv")) %>%
+  {
+    ggplot(.) +
+      aes(x = country, y = total_n) +
+      geom_col() +
+      coord_flip()
+  }
 ```
 
 ```{r bycountry}
@@ -81,4 +89,11 @@ india_dispatch_totals
 india_dispatch_totals %>%
   print() %>%
   write_csv(here("out", "india-exports-bydispatch.csv"))
+```
+
+Now let's visualise:
+
+```{r visbydest}
+ggplot(india_dest_totals) +
+  aes()
 ```
