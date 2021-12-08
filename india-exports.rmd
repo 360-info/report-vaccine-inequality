@@ -232,8 +232,7 @@ india_regions_byprogram %>%
         "Latin America/Caribbean", "Africa", "Asia/Pacific")),
     program = factor(program,
       levels = c("commercial", "covax", "grant"),
-      labels = c("Commercial arrangements", "Non-commercial arrangements",
-        "COVAX program"))) %>%
+      labels = c("Commercial arrangements", "COVAX program", "Non-commercial arrangements"))) %>%
   {
     ggplot(.) +
     aes(x = region, y = region_total) +
