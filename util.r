@@ -56,10 +56,12 @@ get_unicef_totals <- function() {
 
 #' get_india_exports: scrape covax and other export figures from mea.gov.in.
 #' (this table comes with a grouped header that we'll replace manually)
+#' (using archived wayback macine copy from dec 2 2021, as the table shape
+#' often changes)
 #'
 #' @return a data frame of the data
 get_india_exports <- function() {
-  read_html("https://www.mea.gov.in/vaccine-supply.htm") %>%
+  read_html("https://web.archive.org/web/20211202095547/https://www.mea.gov.in/vaccine-supply.htm") %>%
     html_element("#innerContent table.tableData") %>%
     html_table()
 }

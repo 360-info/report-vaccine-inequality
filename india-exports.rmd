@@ -13,19 +13,22 @@ source(here("util.r"))
 ```
 
 ```{r import}
-india <- 
-  # scrape table from the web
-  get_india_exports() %>%
-  # remove the first 2 rows (grouped header) and the last 3 (total/footer)...
+# scrape table from the web (note: using archived dec 2 2021 copy)\
+# locate total row (so we can chuck it and the footnotes)
+india <- get_india_exports()
+total_row_i <- str_which(india[[1]], "Total")
+
+india %>%
   head(-3) %>%
-  tail(-2) %>%
+  tail(-(nrow(india) - total_row_i + 1)) %>%
   # ... and overwrite the default headers
   set_names(c(
     "row", "country",
       paste0("grant_", c("n", "date")),
       paste0("commercial_", c("n", "date")),
       paste0("covax_", c("n", "date")),
-      "total_n"))
+      "total_n")) ->
+india
 
 # write out tidy totals to disk
 india %>%
