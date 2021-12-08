@@ -7,6 +7,9 @@ date: "`r Sys.Date()`"
 ```{r setup}
 library(tidyverse)
 library(themes360info)
+library(ragg)
+library(ggtext)
+library(ggforce)
 library(lubridate)
 library(here)
 source(here("util.r"))
@@ -14,13 +17,16 @@ source(here("util.r"))
 
 ```{r import}
 # scrape table from the web (note: using archived dec 2 2021 copy)\
-# locate total row (so we can chuck it and the footnotes)
 india <- get_india_exports()
-total_row_i <- str_which(india[[1]], "Total")
+# locate the header/footer rows (so we can drop them)
+first_row <- head(str_which(india[[1]], "1"), 1)
+total_row_i <- head(str_which(india[[1]], "Total"), 1)
 
 india %>%
-  head(-3) %>%
-  tail(-(nrow(india) - total_row_i + 1)) %>%
+  # drop the grouped header rows
+  tail(-(first_row - 1)) %>%
+  # drop the total and footnote rows
+  head(-(nrow(india) - total_row_i + 1)) %>%
   # ... and overwrite the default headers
   set_names(c(
     "row", "country",
@@ -37,24 +43,108 @@ india %>%
     total_n = as.numeric(total_n) * 1e5,
     country = fct_reorder(country, total_n)) %>%
   print() %>%
-  write_csv(here("out", "india-exports-totals.csv")) %>%
+  write_csv(here("out", "india-exports-totals.csv")) -> 
+india_tidy  
+```
+
+Which countries receive the most donations?
+
+```{r topcountries}  
+india_tidy  %>%
+  # arrange countries by frequency and lump together after top 20
+  mutate(
+    country = fct_reorder(country, total_n),
+    country = fct_lump_n(country, n = 20, w = total_n,
+      other_level = "Other countries")) %>%
+  group_by(country) %>%
+  summarise(total_n = sum(total_n, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(highlight = if_else(
+      country %in% c("Nepal", "Bangladesh", "Sri Lanka", "Maldives"),
+      pal_360[["blue"]],
+      "black")) %>%
   {
     ggplot(.) +
       aes(x = country, y = total_n) +
-      geom_col() +
-      scale_y_continuous(labels = scales::label_number_si("", accuracy = 1)) +
+      geom_col(aes(fill = highlight)) +
+      scale_y_continuous(
+        expand = expansion(mult = c(0, .1)),
+        labels = scales::label_number_si("", accuracy = 1)) +
+      scale_fill_identity() +
       coord_flip() +
       labs(
-        x = NULL, y = toupper("Number of vaccine doses exported"),
+        x = NULL, y = "Number of vaccine doses exported",
         title = toupper("Indian vaccine exports"),
-        subtitle = "Total to date"
+        subtitle = toupper("Total to date"),
+        caption = paste(
+          "**SOURCE: Ministry of External Affairs**, Government of India",
+          "(https://www.mea.gov.in/vaccine-supply.htm)")
       ) +
-      theme_360info()
-  }
+      theme_360info() +
+      theme(
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+        # plot.caption = element_markdown()
+      )
+  } -> india_total_plot
+
+# save plot to disk  
+ggsave(here("out", "india-all-exports.png"), india_total_plot,
+  width = 1, height = 3 / 4, device = agg_png, dpi = 125, scale = 9.6)
+ggsave(here("out", "india-all-exports.svg"), india_total_plot,
+  width = 1, height = 3 / 4, dpi = 125, scale = 9.6)
 ```
 
+How do exports break down by region?
+
+```{r by region}
+
+regions <-
+  read_csv(here("data", "idea-regime-types-2020.csv")) %>%
+  select(country, region)
+
+# india_tidy %>% left_join(regions) %>% filter(is.na(region)) %>% print(n = 30)
+
+india_tidy %>%
+  left_join(regions) %>%
+  mutate(region = case_when(
+    country == "Bhutan"                   ~ "Asia/Pacific",
+    country == "Maldives"                 ~ "Asia/Pacific",
+    country == "Seychelles"               ~ "Africa",
+    country == "Morocoo"                  ~ "Africa",
+    country == "UAE"                      ~ "Middle East",
+    country == "Dominica"                 ~ "Latin America/Caribbean",
+    country == "Ivory Coast"              ~ "Africa",
+    country == "St. Lucia"                ~ "Latin America/Caribbean",
+    country == "St. Kitts & Nevis"        ~ "Latin America/Caribbean",
+    country == "St. Vincent & Grenadines" ~ "Latin America/Caribbean",
+    country == "Suriname"                 ~ "Latin America/Caribbean",
+    country == "Antigua & Barbuda"        ~ "Latin America/Caribbean",
+    country == "DR Congo"                 ~ "Africa",
+    country == "Sao Tome & Principe"      ~ "Africa",
+    country == "Guyana"                   ~ "Latin America/Caribbean",
+    country == "UK"                       ~ "Europe",
+    country == "Djibouti"                 ~ "Africa",
+    country == "Seirra Leone"             ~ "Africa",
+    country == "Belize"                   ~ "Latin America/Caribbean",
+    country == "Bahamas"                  ~ "Latin America/Caribbean",
+    country == "Palestine"                ~ "Middle East",
+    country == "Nauru"                    ~ "Asia/Pacific",
+    country == "Trinidad & Tobago"        ~ "Latin America/Caribbean",
+    country == "Guinea Bissau"            ~ "Africa",
+    country == "Comoros"                  ~ "Africa",
+    TRUE ~ region)) %>%
+  group_by(region) %>%
+  summarise(region_total = sum(total_n, na.rm = TRUE)) %>%
+  ungroup() %>%
+  mutate(prop = region_total / sum(region_total, na.rm = TRUE))
+```
+
+Looks like about one third has gone to Africa, another third Asia/Pacific, and the rest to other regions. 
+
 ```{r bycountry}
-# okay, first we're going to pivot longer by dispatch type (grant/commercial/covax). then, we'll lengthen further by pulling out each individual dispatch
+# okay, first we're going to pivot longer by dispatch type (grant/commercial/
+# covax). then, we'll lengthen further by pulling out each individual dispatch
 india %>%
   select(-total_n) %>%
   # pivot longer by program (grant/commercial/covax)
@@ -64,13 +154,153 @@ india %>%
     names_sep = "_") ->
 india_dest_totals
 
+# histogram of covax donation size
+india_dest_totals %>%
+  mutate(total = as.numeric(n) * 1e5) %>%
+  replace_na(list(total = 0)) %>%
+  select(country, program, total) %>% 
+  # filter(program == "covax") %>%
+  {
+    ggplot(.) +
+      aes(x = total, fill = program) +
+      geom_histogram() +
+      facet_wrap(vars(program), ncol = 1) +
+      scale_x_log10(labels = scales::label_number_si("", accuracy = 1)) +
+      labs(
+        x = "Size of COVAX donation", y = "Number of countries"
+      ) +
+      theme_360info()
+  }
+```
+
+```{r covaxbarchart}
 # tidy and write out to disk
 india_dest_totals %>%
   mutate(total = as.numeric(n) * 1e5) %>%
   replace_na(list(total = 0)) %>%
   select(country, program, total) %>% 
   print() %>%
-  write_csv(here("out", "india-exports-byprogram.csv"))
+  write_csv(here("out", "india-exports-byprogram.csv")) ->
+india_program_totals_tidy
+```
+
+```{r programsbyregion}
+
+india_program_totals_tidy %>%
+left_join(regions) %>%
+  mutate(region = case_when(
+    country == "Bhutan"                   ~ "Asia/Pacific",
+    country == "Maldives"                 ~ "Asia/Pacific",
+    country == "Seychelles"               ~ "Africa",
+    country == "Morocoo"                  ~ "Africa",
+    country == "UAE"                      ~ "Middle East",
+    country == "Dominica"                 ~ "Latin America/Caribbean",
+    country == "Ivory Coast"              ~ "Africa",
+    country == "St. Lucia"                ~ "Latin America/Caribbean",
+    country == "St. Kitts & Nevis"        ~ "Latin America/Caribbean",
+    country == "St. Vincent & Grenadines" ~ "Latin America/Caribbean",
+    country == "Suriname"                 ~ "Latin America/Caribbean",
+    country == "Antigua & Barbuda"        ~ "Latin America/Caribbean",
+    country == "DR Congo"                 ~ "Africa",
+    country == "Sao Tome & Principe"      ~ "Africa",
+    country == "Guyana"                   ~ "Latin America/Caribbean",
+    country == "UK"                       ~ "Europe",
+    country == "Djibouti"                 ~ "Africa",
+    country == "Seirra Leone"             ~ "Africa",
+    country == "Belize"                   ~ "Latin America/Caribbean",
+    country == "Bahamas"                  ~ "Latin America/Caribbean",
+    country == "Palestine"                ~ "Middle East",
+    country == "Nauru"                    ~ "Asia/Pacific",
+    country == "Trinidad & Tobago"        ~ "Latin America/Caribbean",
+    country == "Guinea Bissau"            ~ "Africa",
+    country == "Comoros"                  ~ "Africa",
+    TRUE ~ region)) %>%
+  group_by(region, program) %>%
+  summarise(region_total = sum(total, na.rm = TRUE)) %>%
+  ungroup() %>%
+  group_by(program) %>%
+  mutate(prop = region_total / sum(region_total, na.rm = TRUE)) %>%
+  arrange(desc(prop)) %>%
+  ungroup() ->
+india_regions_byprogram
+
+india_regions_byprogram %>%
+  replace_na(list(region = "Miscellanious")) %>% 
+  mutate(
+    region = factor(region,
+      levels = c("Miscellanious", "North America", "Europe", "Middle East",
+        "Latin America/Caribbean", "Africa", "Asia/Pacific")),
+    program = factor(program,
+      levels = c("commercial", "covax", "grant"),
+      labels = c("Commercial arrangements", "Non-commercial arrangements",
+        "COVAX program"))) %>%
+  {
+    ggplot(.) +
+    aes(x = region, y = region_total) +
+    geom_col(fill = "black") +
+    facet_row(vars(program)) +
+    scale_y_continuous(
+      expand = expansion(mult = c(0, .1)),
+      labels = scales::label_number_si("", accuracy = 1)) +
+    coord_flip() +
+    labs(
+      x = NULL, y = "Number of doses exported",
+      title = toupper("Indian COVAX exports"),
+      subtitle = toupper("By region and program"),
+      caption = "SOURCE: Ministry of External Affairs, Government of India <https://www.mea.gov.in/vaccine-supply.htm>"
+    ) +
+    theme_360info() +
+    theme(
+      panel.grid.major.y = element_blank(),
+      panel.grid.minor.y = element_blank(),
+      panel.spacing = unit(28, "pt"),
+      strip.text = element_text(face = "bold", hjust = 0, size = rel(1)),
+    )
+  } -> region_program_plot
+
+# save plot to disk
+ggsave(here("out", "india-region-program.png"), region_program_plot,
+  width = 1, height = 0.5, device = agg_png, dpi = 100, scale = 12)
+ggsave(here("out", "india-region-program.svg"), region_program_plot,
+  width = 1, height = 0.5, dpi = 100, scale = 12)
+  
+```
+
+```{r topcovax}
+# now plot covax donations
+india_program_totals_tidy %>%
+  filter(program == "covax") %>%
+  # arrange countries by frequency and lump together after top 20
+  mutate(
+    country = fct_reorder(country, total),
+    country = fct_lump_n(country, n = 20, w = total,
+      other_level = "Other countries")) %>%
+  group_by(country) %>%
+  summarise(total = sum(total, na.rm = TRUE)) %>%
+  ungroup() %>%
+  print() %>%
+  {
+    ggplot(.) +
+      aes(x = country, y = total) +
+      geom_col(fill = "black", colour = NA) +
+      scale_y_continuous(
+        expand = expansion(mult = c(0, .1)),
+        labels = scales::label_number_si("", accuracy = 1)) +
+      coord_flip() +
+      labs(
+        x = NULL, y = "Number of doses exported",
+        title = toupper("Indian COVAX exports"),
+        subtitle = toupper("Total to date"),
+        caption = "**SOURCE: Ministry of External Affairs**, Government of India <https://www.mea.gov.in/vaccine-supply.htm>"
+      ) +
+      theme_360info() +
+      theme(
+        panel.grid.major.y = element_blank(),
+        panel.grid.minor.y = element_blank(),
+      )
+  } %>%
+  ggsave(here("out", "india-covax-exports.png"), .,
+    width = 1, height = 3 / 4, device = agg_png, dpi = 100, scale = 12)
 
 ```
   
