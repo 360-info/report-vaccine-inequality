@@ -21,6 +21,8 @@ Data in these charts variously comes from:
 
 Our analyses are done in [R](http://r-project.org) and can be found in the `*.r` and `*.rmd` files.
 
+The `renv.lock` file can be used with the [`renv`](https://rstudio.github.io/renv) or [`capsule`](https://github.com/MilesMcBain/capsule) packages to recreate the R package dependencies.
+
 ## Help
 
 If you find any problems with our analysis or the map, please feel free to [create an issue](https://github.com/360-info/report-vaccine-inequality/issues/new)!

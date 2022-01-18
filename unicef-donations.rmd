@@ -79,7 +79,7 @@ ggplot(total_dose_check) +
 
 Looks like _most_ estimates are spot on or within 10%, but for a few countries things are out by as much as 60-80%. Which ones are those?
 
-```{r dosecheck}
+```{r dosecheck2}
 total_dose_check %>% filter(abs(dose_diff_pct) > 0.5)
 ```
 
